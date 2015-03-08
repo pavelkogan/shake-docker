@@ -104,13 +104,21 @@ getImages s = do
     Stdout out <- cmd $ "docker images " <> s
     return $ dockerImages out
 
-ltsDockerfile :: String
-ltsDockerfile =
-    "FROM haskell:7.8\n\
-    \RUN cabal update\n\
-    \ADD ./lts-cabal.config /root/.cabal/lts-cabal.config\n\
-    \RUN cd /root/.cabal/ && cat lts-cabal.config >> cabal.config\n\
-    \RUN cabal update && cabal install cabal-install base-prelude"
+projectDockerfile n = unlines
+    [ "FROM haskell-lts:latest"
+    , printf "ADD ./ /%s/" n
+    , printf "RUN cd /%s && cabal install" n
+    , printf "WORKDIR /%s" n
+    ]
+
+ltsDockerfile = unlines
+    [ "FROM haskell:7.8"
+    , "RUN cabal update"
+    , "ADD ./lts-cabal.config /root/.cabal/lts-cabal.config"
+    , "RUN cd /root/.cabal/ && cat lts-cabal.config >> cabal.config"
+    , "RUN cabal update && cabal install cabal-install base-prelude"
+    , "ENV PATH /root/.cabal/bin:$PATH"
+    ]
 
 dockerImages = map dockerImage . drop 1 . lines
 
