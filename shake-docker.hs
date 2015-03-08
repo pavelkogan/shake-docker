@@ -54,6 +54,9 @@ getGitRevision = do
 
 main :: IO ()
 main = shakeArgs shakeOptions{shakeFiles="_shake/"} $ do
+    "clean" ~> do
+        putNormal "Cleaning files in _shake/"
+        removeFilesAfter "_shake" ["//*"]
     alternatives $ do
         "latest.lts-cabal.config" ~> do
             alwaysRerun
