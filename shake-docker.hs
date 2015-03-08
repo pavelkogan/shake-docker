@@ -7,6 +7,7 @@ import Data.Version
 import Development.Shake
 import Development.Shake.FilePath
 import Safe
+import Text.Printf
 
 data DockerImage = DockerImage
     { name :: String
@@ -35,6 +36,22 @@ showTag Latest       = "latest"
 showTag (Version' v) = showVersion v
 showTag (Other s)    = s
 
+data Project = Project
+    { projectName :: String
+    , cabalFile   :: FilePath
+    , gitRevision :: String
+    } deriving (Eq, Show)
+
+getProject = do
+    [f] <- getDirectoryFiles "" ["*.cabal"]
+    let n = takeBaseName f
+    r <- getGitRevision
+    return $ Project n f r
+
+getGitRevision = do
+    Stdout r <- cmd "git rev-parse --short HEAD"
+    return $ head $ words r  -- drops newline
+
 main :: IO ()
 main = shakeArgs shakeOptions{shakeFiles="_shake/"} $ do
     alternatives $ do
@@ -57,12 +74,27 @@ main = shakeArgs shakeOptions{shakeFiles="_shake/"} $ do
             copyFile' config $ buildDir </> "lts-cabal.config"
             let v' = "7.8-" <> v
             () <- cmd (Cwd buildDir) $ "docker build -t haskell-lts:"<>v'<>" ."
-            images <- getImages "haskell-lts"
-            let image = head $ filter ((v' ==) . tag) images
-            writeFileChanged out $ id_ image
+            imageId <- getImageId "haskell-lts" v'
+            writeFileChanged out imageId
+    "_shake/*.project.image" %> \ out -> do
+        Project n _ r <- getProject
+        let revision = dropDirectory1 $ dropExtension2 out
+        when (r /= revision) $ error "git revision error"
+        () <- cmd (printf "docker build -t %s:%s ." n r :: String)
+        imageId <- getImageId n r
+        writeFileChanged out imageId
+    "project" ~> do
+        Project n _ r <- getProject
+        need [printf "_shake/%s.project.image" r]
+        cmd (printf "docker tag -f %s:%s %s:%s" n r n "latest" :: String)
     "lts-versions" ~> do
         images <- getImages "haskell-lts"
         liftIO $ mapM_ (putStrLn . tag) images
+
+getImageId :: String -> String -> Action String
+getImageId n t = do
+    images <- getImages n
+    return $ id_ $ head $ filter ((t ==) . tag) images
 
 getImages :: String -> Action [DockerImage]
 getImages s = do
