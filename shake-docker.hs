@@ -87,11 +87,13 @@ main = shakeArgs shakeOptions{shakeFiles="_shake/"} $ do
         dockerInstallDeps n d `withClean` f $ \ buildDir ->
             dockerBuild (Just buildDir) Nothing (n <> "-deps") "latest" out
     "_shake/*.project.image" %> \ out -> do
-    -- TODO: create dockerfile with FROM being deps image
         Project n _ r <- getProject
         let revision = dropDirectory1 $ dropExtension2 out
         when (r /= revision) $ error "git revision error"
-        dockerBuild Nothing Nothing n r out
+        withTempFile $ \ dockerfile -> do
+            id' <- getImageId (n <> "-deps") "latest"
+            writeFile' dockerfile (projectDockerfile n id')
+            dockerBuild Nothing (Just dockerfile) n r out
     "project" ~> do
         Project n _ r <- getProject
         need [printf "_shake/%s.project.image" r]
@@ -137,6 +139,13 @@ dockerInstallDeps :: String -> [String] -> String
 dockerInstallDeps n d = unlines $ d ++
     [ printf "ADD ./ /%s/" n
     , printf "RUN cd /%s && cabal install --dependencies-only" n
+    ]
+
+projectDockerfile :: String -> String -> String
+projectDockerfile n i = unlines
+    [ printf "FROM %s" i
+    , printf "ADD ./ /%s/" n
+    , printf "RUN cd /%s && cabal install" n
     ]
 
 ltsDockerfile :: String
