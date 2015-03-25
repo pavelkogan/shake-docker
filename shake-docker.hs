@@ -127,8 +127,9 @@ dockerBuild buildDir dockerfile name tag imageIdFile = do
 getImageId :: String         -- ^ image name
            -> String         -- ^ image tag
            -> Action String
-getImageId = flip f where
-    f t = return . _id . head . filter ((t ==) . _tag) <=< getImages
+getImageId n t' = f t' n where
+    f t = return . _id . headNote e . filter ((t ==) . _tag) <=< getImages
+    e   = printf "getImageId - couldn't find image %s:%s" n t'
 
 getImages :: String -> Action [DockerImage]
 getImages s = do
@@ -168,4 +169,5 @@ curlConfig :: FilePath -> FilePath
 curlConfig v = "curl http://www.stackage.org/lts" </> v </> "cabal.config?global=true"
 
 getLtsVersion :: String -> String
-getLtsVersion = dropWhile (not . isDigit) . head . lines
+getLtsVersion = dropWhile (not . isDigit) . headNote e . lines
+    where e = "getLtsVersion"
