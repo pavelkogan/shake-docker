@@ -122,8 +122,11 @@ dockerBuild buildDir dockerfile name tag imageIdFile = do
     imageId <- getImageId name tag
     writeFileChanged imageIdFile imageId
 
-getImageId :: String -> String -> Action String
-getImageId t = return . _id . head . filter ((t ==) . _tag) <=< getImages
+getImageId :: String         -- ^ image name
+           -> String         -- ^ image tag
+           -> Action String
+getImageId = flip f where
+    f t = return . _id . head . filter ((t ==) . _tag) <=< getImages
 
 getImages :: String -> Action [DockerImage]
 getImages s = do
